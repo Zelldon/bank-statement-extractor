@@ -10,7 +10,9 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.text.NumberFormat;
 import java.text.ParseException;
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -20,33 +22,44 @@ public class Main {
     public static final Pattern PATTERN = Pattern.compile("^(.+) (.+) (-?[0-9]+,[0-9]+)$");
     public static final NumberFormat NUMBER_FORMAT = NumberFormat.getInstance(Locale.GERMANY);
 
+    public static final Map<String, Double> CATEGORIES = new HashMap<>();
+
+    static {
+        CATEGORIES.put("amazon", 0.0);
+        CATEGORIES.put("paypal", 0.0);
+        CATEGORIES.put("tank", 0.0);
+        CATEGORIES.put("rewe", 0.0);
+        CATEGORIES.put("kaufland", 0.0);
+        CATEGORIES.put("lidl", 0.0);
+    }
+
 
     public static void main(String[] args) throws Exception {
         File file = new File("/tmp/bank.pdf");
         PDFParser parser = new PDFParser(new RandomAccessReadBufferedFile(file));
 
-        final var amountRef = new AtomicReference<>(new BigDecimal(0));
         try (PDDocument document = parser.parse()) {
             String text = new PDFTextStripper().getText(document);
             text.lines().forEach(line -> {
-                if (line.toLowerCase().contains("amazon")) {
-                    var matcher = PATTERN.matcher(line);
-                    System.out.print(line);
-                    if (matcher.find()) {
-                        System.out.print(" Match 2: " + matcher.group(3));
-                        Number parse = null;
-                        try {
-                            parse = NUMBER_FORMAT.parse(matcher.group(3));
-                        } catch (ParseException e) {
-                            throw new RuntimeException(e);
-                        }
-//                        var value = Double.parseDouble(matcher.group(3));
-                        amountRef.set(amountRef.get().add(BigDecimal.valueOf(parse.doubleValue())));
-                    }
-                    System.out.println();
+
+                var matcher = PATTERN.matcher(line);
+                if (!matcher.find()) {
+                    return; // no amount go to next line
+                }
+
+                try {
+                    final var value = NUMBER_FORMAT.parse(matcher.group(3));
+                    CATEGORIES.keySet().stream()
+                            .filter(category -> line.toLowerCase(Locale.GERMANY).contains(category))
+                            .findAny().ifPresent(category -> CATEGORIES.computeIfPresent(category, (k, v) -> v + value.doubleValue()));
+                } catch (ParseException e) {
+                    throw new RuntimeException(e);
                 }
             });
         }
-        System.out.println("Amount: " + amountRef.get().toString());
+
+        CATEGORIES.keySet().forEach(category -> System.out.printf("%s ", category));
+        System.out.println();
+        CATEGORIES.values().forEach(category -> System.out.printf("%.2f ", category));
     }
 }
