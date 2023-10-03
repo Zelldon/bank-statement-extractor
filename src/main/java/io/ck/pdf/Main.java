@@ -13,7 +13,7 @@ import java.util.regex.Pattern;
 
 public class Main {
 
-    public static final Pattern PATTERN = Pattern.compile("^(.+) (.+) (-?[0-9.]*[0-9]+,[0-9]+)$");
+    public static final Pattern PATTERN = Pattern.compile("^([0-9]+\\.[0-9]+\\.[0-9]+) (.+) (-?[0-9.]*[0-9]+,[0-9]+)$");
     public static final NumberFormat NUMBER_FORMAT = NumberFormat.getInstance(Locale.GERMANY);
 
     /**
@@ -28,6 +28,10 @@ public class Main {
 
     public static final String OUT_KEY = "out";
     public static final String IN_KEY = "in";
+    public static final String IGNORE_SALDO = "saldo";
+    public static final String IGNORE_EXEMPTIO_ORDER = "freistellungsauftrag";
+    public static final String IGNORE_SAVER_ORDER = "sparer-pauschbetrag";
+    public static final Boolean ENABLE_LINE_LOGGING = false;
 
     static {
         CATEGORIES.put("amazon", 0.0);
@@ -38,10 +42,12 @@ public class Main {
         CATEGORIES.put("edeka", 0.0);
         CATEGORIES.put("lidl", 0.0);
         CATEGORIES.put("star", 0.0);
+        CATEGORIES.put("dauerauftrag", 0.0);
 
         GROUPS.put("Grocery", List.of("rewe", "lidl", "edeka", "kaufland"));
         GROUPS.put("Shopping", List.of("amazon", "paypal"));
         GROUPS.put("Fuel", List.of("tank", "star"));
+        GROUPS.put("Order", List.of("dauerauftrag"));
     }
 
 
@@ -76,9 +82,6 @@ public class Main {
 
             System.out.printf("%.2f ", amount);
         });
-
-
-//        CATEGORIES.keySet().forEach(category -> System.out.printf("%.2f ", bankData.get(category)));
     }
 
 
@@ -96,16 +99,24 @@ public class Main {
         text.lines().forEach(line -> {
 
             var matcher = PATTERN.matcher(line);
-            if (!matcher.find() || line.toLowerCase(Locale.GERMANY).contains("saldo")) {
+            if (!matcher.find()
+                || line.toLowerCase(Locale.GERMANY).contains(IGNORE_SALDO)
+                || line.toLowerCase(Locale.GERMANY).contains(IGNORE_EXEMPTIO_ORDER)
+                || line.toLowerCase(Locale.GERMANY).contains(IGNORE_SAVER_ORDER)
+            ) {
                 return; // no amount go to next line
             }
 
             try {
                 final var value = NUMBER_FORMAT.parse(matcher.group(3)).doubleValue();
-                if (value > 0) {
+                if (value >= 0) {
                     categories.computeIfPresent(IN_KEY, (k, v) -> v + value);
                 } else {
                     categories.computeIfPresent(OUT_KEY, (k, v) -> v + value);
+                }
+
+                if (ENABLE_LINE_LOGGING) {
+                    System.out.println(line);
                 }
 
                 CATEGORIES.keySet().stream()
